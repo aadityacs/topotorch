@@ -1,9 +1,9 @@
 """Simple geometry Mesher."""
 
 import dataclasses
-from typing import Optional, Tuple, Union
-import numpy as np
+from typing import Optional, Tuple
 import scipy.spatial as spy_spatial
+import numpy as np
 import torch
 import shapely.geometry as shap_geom
 
@@ -107,8 +107,8 @@ class Mesh:
   """
 
   nodes: Nodes
-  elem_nodes: np.ndarray
-  elem_template: Union[_element.Cube8, _element.Rect4]
+  elem_nodes: torch.Tensor
+  elem_template: _element.Rect4
   gauss_order: Optional[int] = None
 
   def _get_bounding_box(self) -> BoundingBox:
@@ -135,37 +135,37 @@ class Mesh:
     domain_volume = torch.sum(elem_volume)
     return elem_volume, domain_volume
 
-  def _compute_connectivity(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+  def _compute_connectivity(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Compute the element connectivity matrices."""
-    elem_dof_mat = np.array(
+    elem_dof_mat = torch.tensor(
       [
         self.nodes.dof_per_node * node + j
         for elem_nodes in self.elem_nodes
         for node in elem_nodes
         for j in range(self.nodes.dof_per_node)
-      ]
+      ],
+      dtype=torch.long,
     ).reshape(self.num_elems, self.num_dofs_per_elem)
 
-    matrx_size = self.num_elems * self.num_dofs_per_elem**2
-    iK = np.kron(
-      elem_dof_mat, np.ones((self.num_dofs_per_elem, 1), dtype=int)
-    ).T.reshape(matrx_size, order="F")
-    jK = np.kron(
-      elem_dof_mat, np.ones((1, self.num_dofs_per_elem), dtype=int)
-    ).T.reshape(matrx_size, order="F")
+    iK = torch.kron(
+      elem_dof_mat, torch.ones((self.num_dofs_per_elem, 1), dtype=torch.long)
+    ).T.flatten()
+    jK = torch.kron(
+      elem_dof_mat, torch.ones((1, self.num_dofs_per_elem), dtype=torch.long)
+    ).T.flatten()
     return elem_dof_mat, iK, jK
 
-  def _identify_all_elem_face_nodes(self) -> np.ndarray:
+  def _identify_all_elem_face_nodes(self) -> torch.Tensor:
     """
     Return an array of shape
         (num_elems, num_faces_per_elem, num_nodes_per_face)
     containing the global node numbers for every face of every element.
     """
-    face_idx = np.asarray(self.elem_template.face_connectivity, dtype=np.int64)
+    face_idx = torch.as_tensor(self.elem_template.face_connectivity, dtype=torch.long)
     return self.elem_nodes[:, face_idx]
 
   @staticmethod
-  def identify_all_boundary_elem_faces(elem_face_nodes: np.ndarray) -> np.ndarray:
+  def identify_all_boundary_elem_faces(elem_face_nodes: torch.Tensor) -> torch.Tensor:
     """Identifies all boundary faces of the mesh. A boundary face is one that occurs only
       once in the mesh (under any permutation). Thus, we count all the occurences of the
       nodes that make up a face and return a boolean array with True if the occurance
@@ -179,10 +179,10 @@ class Mesh:
       is on the boundary.
     """
     num_elems, num_faces_per_elem, num_nodes_per_face = elem_face_nodes.shape
-    sorted_faces = np.sort(elem_face_nodes, axis=2)
+    sorted_faces = torch.sort(elem_face_nodes, axis=2)
     all_faces = sorted_faces.reshape(-1, num_nodes_per_face)
-    _, unique_inverse, counts = np.unique(
-      all_faces, axis=0, return_inverse=True, return_counts=True
+    _, unique_inverse, counts = torch.unique(
+      all_faces, dim=0, return_inverse=True, return_counts=True
     )
     boundary_mask = counts == 1
     return boundary_mask[unique_inverse].reshape(num_elems, num_faces_per_elem)
@@ -212,11 +212,11 @@ class Mesh:
     self.elem_face_nodes = self._identify_all_elem_face_nodes()
     self.boundary_faces = self.identify_all_boundary_elem_faces(self.elem_face_nodes)
 
-    assert np.max(self.elem_nodes) == self.num_nodes - 1, (
+    assert torch.max(self.elem_nodes) == self.num_nodes - 1, (
       "Element nodes refer to a non-existent node"
     )
 
-  def get_nearest_elem(self, points: torch.Tensor) -> np.ndarray:
+  def get_nearest_elem(self, points: torch.Tensor) -> torch.Tensor:
     """Get the nearest element index of query points.
 
     The nearest point is derived from querying a kdtree constructed from the element
@@ -230,7 +230,7 @@ class Mesh:
       points: Array of (num_points, num_dim) of the query points.
     Returns: Array of (num_points,) of the nearest element index.
     """
-    return self.mesh_kdtree.query(points)[1]
+    return self.mesh_kdtree.query(points.numpy())[1]
 
 
 class VoxelMesh(Mesh):
@@ -251,8 +251,8 @@ class VoxelMesh(Mesh):
   def __init__(
     self,
     nodes: Nodes,
-    elem_nodes: np.ndarray,
-    elem_template: Union[_element.Cube8, _element.Rect4],
+    elem_nodes: torch.Tensor,
+    elem_template: _element.Rect4,
     elem_size: torch.Tensor,
     gauss_order: Optional[int] = None,
   ):
@@ -313,7 +313,7 @@ def deform_mesh(mesh: Mesh, delta: torch.Tensor) -> Mesh:
   )
 
 
-def get_dofs_of_nodes(mesh: Mesh, nodes: np.ndarray) -> np.ndarray:
+def get_dofs_of_nodes(mesh: Mesh, nodes: torch.Tensor) -> torch.Tensor:
   """Get the degrees of freedom of the nodes.
 
   Args:
@@ -323,7 +323,7 @@ def get_dofs_of_nodes(mesh: Mesh, nodes: np.ndarray) -> np.ndarray:
   Returns: Array of (num_nodes, num_dofs_per_node) containing the degrees of freedom
     of the nodes.
   """
-  return np.array(
+  return torch.tensor(
     [
       mesh.nodes.dof_per_node * node + j
       for node in nodes
@@ -332,7 +332,7 @@ def get_dofs_of_nodes(mesh: Mesh, nodes: np.ndarray) -> np.ndarray:
   ).reshape(nodes.shape[0], mesh.nodes.dof_per_node)
 
 
-def compute_point_indices_in_box(coords: np.ndarray, bbox: BoundingBox):
+def compute_point_indices_in_box(coords: torch.Tensor, bbox: BoundingBox):
   """Filters the coordinates in `xy` that are within the bounding box.
 
   Args:
@@ -374,8 +374,8 @@ class GridMesh(VoxelMesh):
     gauss_order: Optional[int] = None,
   ):
     num_dim = len(nel)
-    nel = np.array(nel).astype(np.int32)
-    num_elems = np.prod(nel)
+    nel = torch.tensor(nel, dtype=torch.long)
+    num_elems = torch.prod(nel)
     grid_shape = nel + 1
 
     min_coords = bounding_box.min
@@ -390,16 +390,17 @@ class GridMesh(VoxelMesh):
       self.nelz = nel[2]
 
     coords = [
-      np.linspace(min_coords[d], max_coords[d], grid_shape[d]) for d in range(num_dim)
+      torch.linspace(min_coords[d], max_coords[d], grid_shape[d])
+      for d in range(num_dim)
     ]
-    grids = np.meshgrid(*coords, indexing="ij")
-    node_coords = np.stack(grids, axis=-1).reshape(-1, num_dim)
+    grids = torch.meshgrid(*coords, indexing="ij")
+    node_coords = torch.stack(grids, axis=-1).reshape(-1, num_dim)
     nodes = Nodes(coords=node_coords, dof_per_node=dofs_per_node)
 
-    elem_indices_ranges = [np.arange(n) for n in nel]
-    elem_indices_grid = np.meshgrid(*elem_indices_ranges, indexing="ij")
+    elem_indices_ranges = [torch.arange(n) for n in nel]
+    elem_indices_grid = torch.meshgrid(*elem_indices_ranges, indexing="ij")
     elem_indices_flat = [g.flatten() for g in elem_indices_grid]
-    base_node_indices = np.zeros(num_elems, dtype=np.int32)
+    base_node_indices = torch.zeros(num_elems, dtype=torch.long)
     stride = 1
     for d in range(num_dim - 1, -1, -1):
       base_node_indices += elem_indices_flat[d] * stride
@@ -408,12 +409,12 @@ class GridMesh(VoxelMesh):
     if num_dim == 2:
       elem_template = _element.Rect4()
       nodes_y = grid_shape[1]
-      offsets = np.array([0, nodes_y, nodes_y + 1, 1])
+      offsets = torch.tensor([0, nodes_y, nodes_y + 1, 1])
     elif num_dim == 3:
       elem_template = _element.Cube8()
       nodes_y, nodes_z = grid_shape[1], grid_shape[2]
       nodes_yz = nodes_y * nodes_z
-      offsets = np.array(
+      offsets = torch.tensor(
         [
           0,  # (i,   j,   k   )  local‐0
           nodes_yz,  # (i+1, j,   k   )  local‐1
@@ -460,12 +461,14 @@ def grid_mesh_brep(
   """
 
   min_x, min_y, max_x, max_y = brep.geometry.bounds
-  x_coords = np.linspace(min_x, max_x, nelx_desired + 1)
-  y_coords = np.linspace(min_y, max_y, nely_desired + 1)
-  xx, yy = np.meshgrid(x_coords, y_coords)
+  x_coords = torch.linspace(min_x, max_x, nelx_desired + 1)
+  y_coords = torch.linspace(min_y, max_y, nely_desired + 1)
+  xx, yy = torch.meshgrid(x_coords, y_coords)
 
-  nodes = np.vstack([xx.ravel(), yy.ravel()]).T
-  elem_size = np.abs(np.array([x_coords[1] - x_coords[0], y_coords[1] - y_coords[0]]))
+  nodes = torch.vstack([xx.ravel(), yy.ravel()]).T
+  elem_size = torch.abs(
+    torch.tensor([x_coords[1] - x_coords[0], y_coords[1] - y_coords[0]])
+  )
   elem_nodes = []
   for i in range(nely_desired):
     for j in range(nelx_desired):
@@ -478,22 +481,27 @@ def grid_mesh_brep(
 
   valid_elems = []
   for elem in elem_nodes:
-    elem_centroid = nodes[elem].mean(axis=0)
+    elem_centroid = nodes[elem].mean(dim=0)
     if brep.geometry.contains(shap_geom.Point(elem_centroid)):
       valid_elems.append(elem)
+  print("valid_elems:", valid_elems)
   valid_elems = np.array(valid_elems)
+
+  print("valid_eddddlems:", valid_elems)
 
   used_nodes = np.unique(valid_elems)
   node_map = {old_idx: new_idx for new_idx, old_idx in enumerate(used_nodes)}
 
   filtered_nodes = nodes[used_nodes]
-  filtered_elems = np.array([[node_map[idx] for idx in elem] for elem in valid_elems])
+  filtered_elems = torch.tensor(
+    [[node_map[idx] for idx in elem] for elem in valid_elems]
+  )
 
-  nodes = Nodes(coords=torch.from_numpy(filtered_nodes), dof_per_node=dofs_per_node)
+  nodes = Nodes(coords=filtered_nodes, dof_per_node=dofs_per_node)
   return VoxelMesh(
     nodes=nodes,
     elem_nodes=filtered_elems,
     elem_template=_element.Rect4(),
-    elem_size=torch.from_numpy(elem_size),
+    elem_size=elem_size,
     gauss_order=gauss_order,
   )
