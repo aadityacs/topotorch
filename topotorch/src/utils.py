@@ -217,13 +217,13 @@ def gauss_integ_points_weights(
 
   elif dimension == 2:
     # Generate 2D points and weights as tensor products of 1D points and weights
-    points = torch.Tensor([[x_i, x_j] for x_i in x for x_j in x])
-    weights = torch.Tensor([w_i * w_j for w_i in w for w_j in w])
+    points = torch.tensor([[x_i, x_j] for x_i in x for x_j in x])
+    weights = torch.tensor([w_i * w_j for w_i in w for w_j in w])
 
   elif dimension == 3:
     # Generate 3D points and weights as tensor products of 1D points and weights
-    points = torch.Tensor([[x_i, x_j, x_k] for x_i in x for x_j in x for x_k in x])
-    weights = torch.Tensor([w_i * w_j * w_k for w_i in w for w_j in w for w_k in w])
+    points = torch.tensor([[x_i, x_j, x_k] for x_i in x for x_j in x for x_k in x])
+    weights = torch.tensor([w_i * w_j * w_k for w_i in w for w_j in w for w_k in w])
 
   else:
     raise ValueError("Dimension must be in (1, 3)")
