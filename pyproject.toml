@@ -1,0 +1,36 @@
+[tool.poetry]
+name        = "topotorch"
+version     = "0.0.1"
+description = "A simple implementation of topology optimization in pytorch."
+authors     = [
+  "Aaditya Chandrasekhar <cs.aaditya@gmail.com>",
+]
+packages    = [ { include = "topotorch" } ]  # <-- ensure Poetry finds your code
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.14"
+torch = ">=2.7.0"
+numpy = ">=2.2.6"
+scipy = ">=1.15.2"
+matplotlib = "*"
+pandas = "*"
+PyYAML = "*"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^3.4.0"
+ruff       = "^0.5.5"
+pytest     = "^8.1"
+ipython    = "*"
+ipykernel = "^6.29.5"
+
+[tool.ruff]
+line-length = 88
+indent-width = 2
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
+per-file-ignores = { "__init__.py" = ["F401"] }
+
+[build-system]
+requires    = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
