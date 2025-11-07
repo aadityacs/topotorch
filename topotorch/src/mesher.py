@@ -113,8 +113,8 @@ class Mesh:
 
   def _get_bounding_box(self) -> BoundingBox:
     """Get the bounding box of the mesh."""
-    min_xy = torch.min(self.nodes.coords, dim=0)
-    max_xy = torch.max(self.nodes.coords, dim=0)
+    min_xy = torch.amin(self.nodes.coords, dim=0)
+    max_xy = torch.amax(self.nodes.coords, dim=0)
     return BoundingBox(
       x=_utils.Extent(min=min_xy[0], max=max_xy[0]),
       y=_utils.Extent(min=min_xy[1], max=max_xy[1]) if len(min_xy) > 1 else None,

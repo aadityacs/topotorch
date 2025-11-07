@@ -261,9 +261,9 @@ def threshold_filter(
 
   Returns: The thresholded density value array of size (num_elems,).
   """
-  v1 = torch.tanh(eta * beta)
+  v1 = np.tanh(eta * beta)
   nm = v1 + torch.tanh(beta * (density - eta))
-  dnm = v1 + torch.tanh(beta * (1.0 - eta))
+  dnm = v1 + np.tanh(beta * (1.0 - eta))
   return nm / dnm
 
 
@@ -297,8 +297,10 @@ def create_density_filter(
   num_pts = coords.shape[0]
 
   distances = torch.cdist(coords, coords)
+  print("distances:", distances.shape)
 
-  row_indices, col_indices = torch.where(distances <= cutoff_distance)
+  indices = torch.nonzero(distances <= cutoff_distance, as_tuple=True)
+  row_indices, col_indices = indices[0], indices[1]
   relevant_distances = distances[row_indices, col_indices]
 
   if filter_type == Filters.LINEAR:

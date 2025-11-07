@@ -25,7 +25,7 @@ class SparseLinearSolve(torch.autograd.Function):
     Returns: The solution x  of size (N,).
     """
 
-    mtrx = mtrx.coalesce()
+    # mtrx = mtrx.coalesce()
 
     # 1. Convert to SciPy
     mtrx_indices = mtrx.indices().detach().cpu().numpy()
