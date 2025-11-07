@@ -51,7 +51,7 @@ class FEA:
     mesh: _mesh.Mesh,
     mat: _mat.StructuralMaterial,
     bc: _bc.BCDict,
-    fixture_penalty: float = 1e8,
+    fixture_penalty: float = 1e5,
   ):
     """Initialize the solver.
 
