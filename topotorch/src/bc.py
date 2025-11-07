@@ -3,6 +3,7 @@
 import abc
 from typing import List, TypedDict, Tuple, Callable, Union, Optional
 import enum
+import numpy as np
 import torch
 
 import topotorch.src.utils as _utils
@@ -10,7 +11,7 @@ import topotorch.src.mesher as _mesh
 
 
 def _is_face_on_edges(
-  face_coords: torch.Tensor, edges: List[torch.Tensor], tol: float
+  face_coords: np.ndarray, edges: List[np.ndarray], tol: float
 ) -> bool:
   """Check if the face coordinates are on the edges.
 
@@ -24,8 +25,11 @@ def _is_face_on_edges(
   Returns: True if the face coordinates are on any of the edges, False otherwise.
   """
   for edge in edges:
-    if torch.all(
-      [_utils.is_point_on_segment(edge[0], edge[1], c, tol) for c in face_coords]
+    if np.all(
+      [
+        _utils.is_point_on_segment(edge[0], edge[1], c, tol)
+        for c in face_coords.numpy()
+      ]
     ):
       return True
   return False
@@ -33,8 +37,8 @@ def _is_face_on_edges(
 
 def identify_faces(
   mesh: _mesh.Mesh,
-  cond_fn: Optional[Callable[[torch.Tensor], bool]] = None,
-  edges: List[torch.Tensor] | None = None,
+  cond_fn: Optional[Callable[[np.ndarray], bool]] = None,
+  edges: List[np.ndarray] | None = None,
   tol: float = 1e-6,
 ) -> List[Tuple[int, int]]:
   """Identify the boundary faces of the mesh that satisfy a condition.
@@ -108,7 +112,7 @@ class DirichletBC(BoundaryCondition):
   def __init__(
     self,
     elem_faces: List[tuple[int, int]],
-    values: List[Tuple[enum.Enum, torch.Tensor]],
+    values: List[Tuple[enum.Enum, np.ndarray]],
     name: str = "",
   ):
     """Initialize Dirichlet boundary condition."""
@@ -116,7 +120,7 @@ class DirichletBC(BoundaryCondition):
     self.elem_faces = elem_faces
     self.values = values
 
-  def process(self, mesh: _mesh.Mesh) -> tuple[torch.Tensor, torch.Tensor]:
+  def process(self, mesh: _mesh.Mesh) -> tuple[np.ndarray, np.ndarray]:
     """Process the Dirichlet boundary conditions.
 
     Args:
@@ -166,7 +170,7 @@ class NeumannBC(BoundaryCondition):
   def __init__(
     self,
     elem_faces: List[tuple[int, int]],
-    values: List[Tuple[enum.Enum, torch.Tensor]],
+    values: List[Tuple[enum.Enum, np.ndarray]],
     name: str = "",
   ):
     """Initialize Neumann boundary condition."""
@@ -174,7 +178,7 @@ class NeumannBC(BoundaryCondition):
     self.elem_faces = elem_faces
     self.values = values
 
-  def process(self, mesh: _mesh.Mesh) -> List[tuple[int, torch.Tensor]]:
+  def process(self, mesh: _mesh.Mesh) -> List[tuple[int, np.ndarray]]:
     """Process the Neumann boundary conditions.
 
     Args:
@@ -201,8 +205,8 @@ class NeumannBC(BoundaryCondition):
 
 class BCDict(TypedDict):
   elem_forces: torch.Tensor
-  fixed_dofs: torch.Tensor
-  free_dofs: torch.Tensor
+  fixed_dofs: np.ndarray
+  free_dofs: np.ndarray
   dirichlet_values: torch.Tensor
 
 
@@ -247,19 +251,19 @@ def process_boundary_conditions(
   )
 
 
-def apply_dirichlet_bc(stiffness: torch.Tensor, fixed_dofs: torch.Tensor) -> torch.Tensor:
-  """Applies Dirichlet boundary conditions to a sparse COO stiffness matrix.
+def apply_dirichlet_bc(jacobian: torch.Tensor, fixed_dofs: np.ndarray) -> torch.Tensor:
+  """Applies Dirichlet boundary conditions to a sparse COO Jacobian matrix.
 
   Args:
-    stiffness: The stiffness matrix as a PyTorch COO sparse matrix.
+    jacobian: The Jacobian matrix as a PyTorch COO sparse matrix.
     fixed_dofs: Array of fixed degree of freedom indices.
 
   Returns:
-    The modified stiffness matrix as a PyTorch COO sparse matrix.
+    The modified Jacobian matrix as a JAX BCOO sparse matrix.
   """
-  coalesced_stiff = stiffness.coalesce()
-  indices = coalesced_stiff.indices()
-  values = coalesced_stiff.values()
+  coalesced_jacobian = jacobian.coalesce()
+  indices = coalesced_jacobian.indices()
+  values = coalesced_jacobian.values()
 
   fixed_dofs_tensor = torch.from_numpy(fixed_dofs).to(indices.device)
 
@@ -272,14 +276,14 @@ def apply_dirichlet_bc(stiffness: torch.Tensor, fixed_dofs: torch.Tensor) -> tor
   col_mask = torch.isin(col_indices, fixed_dofs_tensor)
   values = torch.where(col_mask, 0.0, values)
 
-  modified_stiff = torch.sparse_coo_tensor(indices, values, stiffness.shape)
+  modified_jacobian = torch.sparse_coo_tensor(indices, values, jacobian.shape)
 
   # Add back diagonal entries with 1.0
   diag_indices = torch.stack([fixed_dofs_tensor, fixed_dofs_tensor], dim=0)
   diag_values = torch.ones_like(fixed_dofs_tensor, dtype=values.dtype)
-  diag_stiff = torch.sparse_coo_tensor(diag_indices, diag_values, stiffness.shape)
+  diag_jacobian = torch.sparse_coo_tensor(diag_indices, diag_values, jacobian.shape)
 
-  return (modified_stiff + diag_stiff).coalesce()
+  return (modified_jacobian + diag_jacobian).coalesce()
 
 
 bcLike = Union[BoundaryCondition, DirichletBC, NeumannBC]

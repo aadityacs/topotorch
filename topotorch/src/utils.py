@@ -8,6 +8,22 @@ import scipy.special as spy_spl
 import torch
 
 
+def to_np(x: torch.Tensor) -> np.ndarray:
+  """Convert Torch Tensor to Numpy Array."""
+  if isinstance(x, torch.Tensor):
+    return x.detach().cpu().numpy()
+  else:
+    return x
+
+
+def to_torch(x: np.ndarray, dtype: torch.dtype= torch.float64) -> torch.Tensor:
+  """Convert Numpy Array to Torch Tensor."""
+  if isinstance(x, np.ndarray):
+    return torch.tensor(x, dtype=dtype)
+  else:
+    return x
+
+
 class Direction(enum.Enum):
   """Euclidean Directions."""
 
@@ -311,7 +327,7 @@ def create_density_filter(
 
 
 def is_point_on_segment(
-  start_pt: torch.Tensor, end_pt: torch.Tensor, pt: torch.Tensor, tolerance: float = 1e-9
+  start_pt: np.ndarray, end_pt: np.ndarray, pt: np.ndarray, tolerance: float = 1e-9
 ) -> bool:
   """Checks if a point lies on a line segment with a given tolerance.
 
@@ -327,24 +343,12 @@ def is_point_on_segment(
   Returns: True if the point is on the line segment, False otherwise.
   """
   # Boundedness Check
-  in_bounds = torch.all(pt >= torch.minimum(start_pt, end_pt) - tolerance) and torch.all(
-    pt <= torch.maximum(start_pt, end_pt) + tolerance
+  in_bounds = np.all(pt >= np.minimum(start_pt, end_pt) - tolerance) and np.all(
+    pt <= np.maximum(start_pt, end_pt) + tolerance
   )
   if not in_bounds:
     return False
 
   # Collinearity Check
-
-
-  vec1 = end_pt - start_pt
-  vec2 = pt - start_pt
-
-  num_dims = start_pt.shape[0]
-  if num_dims == 2:
-    cross_product = vec1[0] * vec2[1] - vec1[1] * vec2[0]
-    return torch.abs(cross_product) < tolerance
-  elif num_dims == 3:
-    cross_product = torch.cross(vec1, vec2)
-    return torch.linalg.norm(cross_product) < tolerance
-  else:
-    raise ValueError("Only 2D and 3D points are supported.")
+  cross_product = np.cross(end_pt - start_pt, pt - start_pt)
+  return np.abs(cross_product) < tolerance

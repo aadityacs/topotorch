@@ -1,7 +1,7 @@
 """Simple geometry reader and processor."""
 
 import json
-import torch
+import numpy as np
 import shapely
 
 
@@ -80,7 +80,7 @@ class BrepGeometry:
         geom = shapely.geometry.shape(feature["geometry"])
         feature_edges, feature_nodes = self._get_edges_and_nodes(geom)
         for edge in feature_edges:
-          edges[ctr] = torch.tensor(edge)
+          edges[ctr] = np.array(edge)
           ctr += 1
         nodes.update(feature_nodes)
     return edges, nodes
