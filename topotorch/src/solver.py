@@ -25,9 +25,7 @@ class SparseLinearSolve(torch.autograd.Function):
     Returns: The solution x  of size (N,).
     """
 
-    # mtrx = mtrx.coalesce()
-
-    # 1. Convert to SciPy
+    # 1.Convert to SciPy
     mtrx_indices = mtrx.indices().detach().cpu().numpy()
     mtrx_values = mtrx.values().detach().cpu().numpy()
     mtrx_shape = mtrx.shape
@@ -37,11 +35,11 @@ class SparseLinearSolve(torch.autograd.Function):
       (mtrx_values, (mtrx_indices[0], mtrx_indices[1])), shape=mtrx_shape
     ).tocsc()
 
-    # 2. Solve
+    # 2.Solve
     x_numpy = spsolve(mtrx_scipy, b_numpy)
     x_torch = torch.tensor(x_numpy, dtype=b.dtype, device=b.device)
 
-    # --- Save for backward ---
+    # 3.Save for backward
     ctx.save_for_backward(mtrx.indices(), mtrx.values(), x_torch)
     ctx.mtrx_shape = mtrx_shape
     ctx.b_dtype = b.dtype
@@ -86,16 +84,13 @@ class SparseLinearSolve(torch.autograd.Function):
       .tocsc()
     )
 
-    # --- Solve adjoint system A^T * y = grad_x ---
-    # The solution y is the gradient w.r.t. b (dL/db)
+    # 1.Solve adjoint system A^T * y = grad_x
     grad_x_numpy = grad_x.cpu().numpy()
 
-    # spsolve with 1D grad_x will return 1D grad_b
     grad_b_numpy = spsolve(mtrx_scipy, grad_x_numpy)
-
     grad_b_torch = torch.tensor(grad_b_numpy, dtype=ctx.b_dtype, device=ctx.b_device)
 
-    # --- Compute gradients ---
+    #2. Compute gradients
     if ctx.needs_input_grad[1]:
       grad_b = grad_b_torch
 
