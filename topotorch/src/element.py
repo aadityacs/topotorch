@@ -191,24 +191,11 @@ class Quad4:
       given xi, and eta. The 4 corresponds to the number of nodes in the element
       and 2 corresponds to the number of physical dimensions.
     """
+    xi, eta = gauss_pt[0], gauss_pt[1]
     xis = torch.tensor([-1, 1, 1, -1])
     etas = torch.tensor([-1, -1, 1, 1])
-    dN_dxi = torch.tensor(
-      [
-        0.25 * xis[0] * (1 - gauss_pt[1]),
-        0.25 * xis[1] * (1 - gauss_pt[1]),
-        0.25 * xis[2] * (1 + gauss_pt[1]),
-        0.25 * xis[3] * (1 + gauss_pt[1]),
-      ]
-    )
-    dN_deta = torch.tensor(
-      [
-        0.25 * (1 - gauss_pt[0]) * etas[0],
-        0.25 * (1 + gauss_pt[0]) * etas[1],
-        0.25 * (1 + gauss_pt[0]) * etas[2],
-        0.25 * (1 - gauss_pt[0]) * etas[3],
-      ]
-    )
+    dN_dxi = 0.25 * xis * (1 + etas * eta)
+    dN_deta = 0.25 * etas * (1 + xis * xi)
     return torch.stack((dN_dxi, dN_deta), dim=1)
 
   @classmethod
