@@ -121,41 +121,42 @@ class FEA:
   def solve(
     self,
     assm_stiff_mtrx: torch.Tensor,
-    addn_force: Optional[torch.Tensor] = None,
+    force: Optional[torch.Tensor] = None,
   ) -> torch.Tensor:
     """Solve the system of Finite element equations.
 
     Args:
       glob_stiff_mtrx: Array of size (num_dofs, num_dofs) which is the assembled
         global stiffness matrix.
-      addn_force: Additional force of size (num_dofs,) to be added to the system.
+      force: Force of size (num_dofs,) to be enforced. If None, uses the force
+        from the boundary conditions.
 
     Returns: Array of size (num_dofs,) which is the displacement of the nodes.
     """
-    if addn_force is None:
-      addn_force = torch.zeros_like(self.bc["force"])
-    force = self.bc["force"] + addn_force
+    if force is None:
+      force = self.bc["force"]
     u = _solver.solve(assm_stiff_mtrx.coalesce(), force).flatten()
     return u
 
   def compute_compliance(
     self,
     u: torch.Tensor,
-    addn_force: Optional[torch.Tensor] = None,
+    force: Optional[torch.Tensor] = None,
   ) -> torch.Tensor:
     """Objective measure for structural performance.
     Args:
       u: Array of size (num_dofs,) which is the displacement of the nodes
         of the mesh.
-      addn_force: Additional force of size (num_dofs, 1) to be added to the system.
+      force: Force of size (num_dofs,) to be enforced. If None, uses the force
+        from the boundary conditions.
 
     Returns: Structural compliance, which is a measure of performance. Lower
       compliance means stiffer and stronger design.
     """
-    if addn_force is None:
-      addn_force = torch.zeros_like(self.bc["force"])
+    if force is None:
+      force = torch.zeros_like(self.bc["force"])
 
-    return torch.dot(u.view(-1), (self.bc["force"] + addn_force).view(-1))
+    return torch.dot(u.view(-1), force)
 
   def loss_function(
     self,
@@ -181,7 +182,7 @@ class FEA:
     )(lame_lams, lame_mus, self.mesh.elem_node_coords)
 
     glob_stiff_mtrx = self.assemble_stiffness_matrix(elem_stiffness_mtrx)
-    glob_stiff_mtrx = _bc.apply_dirichlet_bc(glob_stiff_mtrx, self.bc["fixed_dofs"])
+    glob_stiff_mtrx, f_mod = _bc.apply_dirichlet_bc(glob_stiff_mtrx, self.bc)
 
-    u = self.solve(glob_stiff_mtrx, addn_force)
-    return self.compute_compliance(u, addn_force), u
+    u = self.solve(glob_stiff_mtrx, f_mod)
+    return self.compute_compliance(u, f_mod), u

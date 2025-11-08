@@ -204,6 +204,7 @@ class NeumannBC(BoundaryCondition):
 
 
 class BCDict(TypedDict):
+  force: torch.Tensor
   elem_forces: torch.Tensor
   fixed_dofs: np.ndarray
   free_dofs: np.ndarray
@@ -243,7 +244,15 @@ def process_boundary_conditions(
   fixed_dofs = np.array(dirichlet_dofs).astype(int).reshape(-1)
   free_dofs = np.setdiff1d(np.arange(mesh.num_dofs), fixed_dofs)
 
+  force = torch.zeros((mesh.num_dofs,), dtype=torch.double)
+  force = force.index_add(
+    0,
+    _utils.to_torch(mesh.elem_dof_mat.flatten(), dtype=torch.long),
+    elem_forces.flatten().double(),
+  )
+
   return BCDict(
+    force=force,
     elem_forces=elem_forces,
     fixed_dofs=fixed_dofs,
     free_dofs=free_dofs,
@@ -251,21 +260,41 @@ def process_boundary_conditions(
   )
 
 
-def apply_dirichlet_bc(jacobian: torch.Tensor, fixed_dofs: np.ndarray) -> torch.Tensor:
-  """Applies Dirichlet boundary conditions to a sparse COO Jacobian matrix.
+def apply_dirichlet_bc(
+  stiff: torch.Tensor,
+  bc: BCDict,
+) -> tuple[torch.Tensor, torch.Tensor]:
+  """Applies Dirichlet boundary conditions to a sparse COO stiffness matrix.
 
   Args:
-    jacobian: The Jacobian matrix as a PyTorch COO sparse matrix.
-    fixed_dofs: Array of fixed degree of freedom indices.
+    stiff: The assembled stiffness matrix as a PyTorch COO sparse matrix of (N, N).
+    bc: The boundary condition dictionary containing fixed dofs and dirichlet values
+      and the assembled force vector.
 
   Returns:
-    The modified Jacobian matrix as a JAX BCOO sparse matrix.
+    A tuple (K_mod, f_mod) containing the modified stiffness matrix
+    (sparse COO) and modified force vector (dense).
   """
-  coalesced_jacobian = jacobian.coalesce()
-  indices = coalesced_jacobian.indices()
-  values = coalesced_jacobian.values()
+  fixed_dofs, force = bc["fixed_dofs"], bc["force"]
+  dirichlet_values = bc["dirichlet_values"]
+  device = stiff.device
+  dtype = stiff.dtype
+  num_dofs = stiff.shape[0]
 
-  fixed_dofs_tensor = torch.from_numpy(fixed_dofs).to(indices.device)
+  # compute modified force vector
+  fixed_dofs_tensor = torch.from_numpy(fixed_dofs).to(device)
+
+  u_prescribed = torch.zeros(num_dofs, dtype=dtype, device=device)
+  u_prescribed.scatter_(0, fixed_dofs_tensor, dirichlet_values)
+
+  f_reaction = torch.sparse.mm(stiff, u_prescribed.unsqueeze(1)).squeeze(1)
+  f_mod = force - f_reaction
+  f_mod.scatter_(0, fixed_dofs_tensor, dirichlet_values)
+
+  # compute modified stiffness matrix
+  coalesced_stiff = stiff.coalesce()
+  indices = coalesced_stiff.indices()
+  values = coalesced_stiff.values()
 
   row_indices = indices[0, :]
   col_indices = indices[1, :]
@@ -276,14 +305,14 @@ def apply_dirichlet_bc(jacobian: torch.Tensor, fixed_dofs: np.ndarray) -> torch.
   col_mask = torch.isin(col_indices, fixed_dofs_tensor)
   values = torch.where(col_mask, 0.0, values)
 
-  modified_jacobian = torch.sparse_coo_tensor(indices, values, jacobian.shape)
+  modified_stiff = torch.sparse_coo_tensor(indices, values, stiff.shape)
 
   # Add back diagonal entries with 1.0
   diag_indices = torch.stack([fixed_dofs_tensor, fixed_dofs_tensor], dim=0)
   diag_values = torch.ones_like(fixed_dofs_tensor, dtype=values.dtype)
-  diag_jacobian = torch.sparse_coo_tensor(diag_indices, diag_values, jacobian.shape)
+  diag_stiff = torch.sparse_coo_tensor(diag_indices, diag_values, stiff.shape)
 
-  return (modified_jacobian + diag_jacobian).coalesce()
+  return (modified_stiff + diag_stiff).coalesce(), f_mod
 
 
 bcLike = Union[BoundaryCondition, DirichletBC, NeumannBC]
