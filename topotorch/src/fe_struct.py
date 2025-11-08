@@ -12,7 +12,7 @@ where:
   P : Cauchy stress tensor.
   B : Body force vector in the reference configuration.
 
-The weak form of this equation states that the internal virtual work must equal
+The weak form of this equation states that the internal virtual work must equal 
 the external virtual work for any admissible virtual displacement. This leads to
 the residual equation for a single element:
 
@@ -162,7 +162,6 @@ class FEA:
     self,
     lame_lams: torch.Tensor,
     lame_mus: torch.Tensor,
-    addn_force: Optional[torch.Tensor] = None,
   ) -> torch.Tensor:
     """Wrapper function that takes in element material props and returns compliance.
 
@@ -171,8 +170,6 @@ class FEA:
         lambda for each element.
       lame_mus: Array of size (num_elems,) that contain the Lame (second) param mu for
         each element.
-      addn_force: Additional force of size (num_dofs, 1) to be added to the
-        system. This could for instance be the force due to thermal expansion.
 
     Returns: Structural compliance, which is a measure of performance. Lower
       compliance means stiffer and stronger design.

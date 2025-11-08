@@ -166,16 +166,16 @@ class Mesh:
 
   @staticmethod
   def identify_all_boundary_elem_faces(elem_face_nodes: np.ndarray) -> np.ndarray:
-    """Identifies all boundary faces of the mesh. A boundary face is one that occurs only
-      once in the mesh (under any permutation). Thus, we count all the occurences of the
-      nodes that make up a face and return a boolean array with True if the occurance
-      is unique.
+    """Identifies all boundary faces of the mesh. A boundary face occurs only once in
+      the mesh (under any permutation). Thus, we count all the occurences of the nodes
+      that make up a face and return a boolean array with True if the occurance is
+      unique.
 
     Args:
-      elem_face_nodes: An array of (num_elems, num_faces_per_elem, num_nodes_per_face) of
+      elem_face_nodes: Array of (num_elems, num_faces_per_elem, num_nodes_per_face) of
         the nodes of each face.
 
-    Returns: A boolean array of (num_elems, num_faces_per_elem) that indicates if the face
+    Returns: A boolean array of (num_elems, num_faces_per_elem) that indicates if face
       is on the boundary.
     """
     num_elems, num_faces_per_elem, num_nodes_per_face = elem_face_nodes.shape

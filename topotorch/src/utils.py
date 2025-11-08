@@ -62,7 +62,7 @@ class Extent:
     return (torch.log10(x) - log_min) / log_range
 
   def renormalize_array_log(self, x: torch.Tensor) -> torch.Tensor:
-    """Recover array from logarithmically normalized `x` using `extent` ranges in base 10."""
+    """Recover array from log normalized `x` using `extent` ranges in base 10."""
     log_min = torch.log10(self.min)
     log_range = torch.log10(self.max) - log_min
     return torch.pow(10.0, x * log_range + log_min)
@@ -147,7 +147,7 @@ def safe_pnorm(x: torch.Tensor, p: float, axis: int):
 
   Args:
     x: The input array.
-    p: The Exponent value. The larger the value, the closer the p-norm is to the maximum.
+    p: The Exponent value. The larger the value, the closer the norm is to true maximum.
       However, the problem becomes more nonlinear. A typical value is 6.0.
     axis: The axis along which the p-norm is computed.
 

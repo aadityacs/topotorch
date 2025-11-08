@@ -103,7 +103,7 @@ def compute_hookean_const_matrix(
 ) -> torch.Tensor:
   """Compute the PK2 stress for a Hookean material.
 
-  This function computes the PK2 stress tensor for a Hookean material using
+  This function computes the PK2 stress tensor for a Hookean material using  
   the small strain approximation. The linearized material model considers the small
   strain tensor :
 
@@ -116,7 +116,7 @@ def compute_hookean_const_matrix(
   Args:
     lame_parameters:A tuple containing the Lame parameters (lambda, mu).
 
-  Returns: The Second Piola-Kirchhoff stress tensor (num_dim, num_dim).
+  Returns: The constitutive matrix `C_ijkl` where {i,j,k,l} \in num_dim.
   """
   lmbda, mu = lame_parameters
   eye = torch.eye(num_dim, dtype=torch.float64)
