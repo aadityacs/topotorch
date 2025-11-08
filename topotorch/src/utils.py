@@ -297,7 +297,6 @@ def create_density_filter(
   num_pts = coords.shape[0]
 
   distances = torch.cdist(coords, coords)
-  print("distances:", distances.shape)
 
   indices = torch.nonzero(distances <= cutoff_distance, as_tuple=True)
   row_indices, col_indices = indices[0], indices[1]
